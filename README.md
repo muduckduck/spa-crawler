@@ -1,23 +1,35 @@
-# SPA Crawler - Railway Deployment
+# SPA Crawler - Render Deployment (Playwright)
 
-Puppeteer-based SPA (Single Page Application) crawler server for extracting links and generating content hashes from JavaScript-heavy websites.
+Playwright-based SPA (Single Page Application) crawler server for extracting links and generating content hashes from JavaScript-heavy websites. Optimized for Render deployment.
 
 ## Features
 
-- 🚀 **SPA Support**: Fully renders JavaScript before extracting content
+- 🚀 **SPA Support**: Fully renders JavaScript using Playwright Chromium
 - 🔗 **Link Extraction**: `/crawl` - Extracts all links from SPA pages
 - 🔐 **Content Hash**: `/hash` - Generates MD5 hash from rendered HTML
-- 🐳 **Docker Ready**: Optimized Dockerfile for Railway deployment
-- ⚡ **Express API**: Simple GET endpoints
+- 🐳 **Docker Ready**: Uses official Playwright Docker image
+- ⚡ **Express API**: Simple GET endpoints with CORS support
+- 🎭 **Playwright**: More reliable than Puppeteer for modern web apps
 
-## Quick Deploy to Railway
+## Quick Deploy to Render
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
-1. Click the button above
-2. Connect your GitHub repository
-3. Railway will automatically detect the Dockerfile
-4. Your service will be deployed with a public URL
+### Manual Deployment
+
+1. Fork/clone this repository to your GitHub account
+2. Go to [Render Dashboard](https://dashboard.render.com/)
+3. Click "New +" → "Web Service"
+4. Connect your GitHub repository
+5. Configure:
+   - **Name**: `spa-crawler`
+   - **Environment**: `Docker`
+   - **Region**: Select your preferred region
+   - **Instance Type**: Free (or paid for better performance)
+6. Click "Create Web Service"
+7. Render will automatically detect `Dockerfile` and deploy
+
+Your service will be available at: `https://spa-crawler-xxx.onrender.com`
 
 ## API Endpoints
 
@@ -31,7 +43,7 @@ GET /
 ```json
 {
   "status": "ok",
-  "service": "SPA Crawler",
+  "service": "SPA Crawler (Playwright)",
   "endpoints": {
     "crawl": "/crawl?url=<URL>",
     "hash": "/hash?url=<URL>"
@@ -90,69 +102,75 @@ GET /hash?url=https://example.com
 ### cURL
 
 ```bash
+# Service info
+curl "https://spa-crawler-xxx.onrender.com/"
+
 # Extract links from SPA page
-curl "https://your-app.railway.app/crawl?url=https://www.epost.go.kr"
+curl "https://spa-crawler-xxx.onrender.com/crawl?url=https://www.epost.go.kr"
 
 # Generate content hash
-curl "https://your-app.railway.app/hash?url=https://www.epost.go.kr"
+curl "https://spa-crawler-xxx.onrender.com/hash?url=https://www.epost.go.kr"
 ```
 
 ### JavaScript (fetch)
 
 ```javascript
+const BASE_URL = 'https://spa-crawler-xxx.onrender.com';
+
 // Extract links
 const crawlResponse = await fetch(
-  'https://your-app.railway.app/crawl?url=https://www.epost.go.kr'
+  `${BASE_URL}/crawl?url=${encodeURIComponent('https://www.epost.go.kr')}`
 );
 const crawlData = await crawlResponse.json();
 console.log('Links:', crawlData.links);
 
 // Generate hash
 const hashResponse = await fetch(
-  'https://your-app.railway.app/hash?url=https://www.epost.go.kr'
+  `${BASE_URL}/hash?url=${encodeURIComponent('https://www.epost.go.kr')}`
 );
 const hashData = await hashResponse.json();
 console.log('Hash:', hashData.hash);
 ```
 
-### Integration Example
+### Integration with Web Quality Checker
 
 ```javascript
 const axios = require('axios');
 
-const BASE_URL = 'https://your-app.railway.app';
+const CRAWLER_URL = 'https://spa-crawler-xxx.onrender.com';
 
-// Check for duplicate pages using hash
-async function isDuplicatePage(url, knownHashes) {
-  const response = await axios.get(`${BASE_URL}/hash`, {
-    params: { url }
+// Extract links from SPA site
+async function extractSpaLinks(baseUrl) {
+  const response = await axios.get(`${CRAWLER_URL}/crawl`, {
+    params: { url: baseUrl }
   });
-  
-  const { hash } = response.data;
-  return knownHashes.includes(hash);
+  return response.data.links;
 }
 
-// Extract all links from SPA
-async function getAllLinks(url) {
-  const response = await axios.get(`${BASE_URL}/crawl`, {
+// Check for duplicate pages
+async function isDuplicatePage(url, knownHashes) {
+  const response = await axios.get(`${CRAWLER_URL}/hash`, {
     params: { url }
   });
-  
-  return response.data.links;
+  return knownHashes.has(response.data.hash);
 }
 
 // Usage
 const mainUrl = 'https://www.epost.go.kr';
-const links = await getAllLinks(mainUrl);
-console.log(`Found ${links.length} links`);
+const links = await extractSpaLinks(mainUrl);
+console.log(`Found ${links.length} links in SPA`);
 
-const knownHashes = [];
-for (const link of links) {
-  const isDuplicate = await isDuplicatePage(link, knownHashes);
-  if (!isDuplicate) {
-    console.log('New page:', link);
-    const response = await axios.get(`${BASE_URL}/hash`, { params: { url: link } });
-    knownHashes.push(response.data.hash);
+const knownHashes = new Set();
+for (const link of links.slice(0, 5)) {
+  const response = await axios.get(`${CRAWLER_URL}/hash`, { 
+    params: { url: link } 
+  });
+  
+  if (!knownHashes.has(response.data.hash)) {
+    console.log('Unique page:', link);
+    knownHashes.add(response.data.hash);
+  } else {
+    console.log('Duplicate page:', link);
   }
 }
 ```
@@ -163,6 +181,12 @@ for (const link of links) {
 
 ```bash
 npm install
+```
+
+### Install Playwright Browsers
+
+```bash
+npx playwright install chromium
 ```
 
 ### Run Locally
@@ -199,82 +223,125 @@ docker build -t spa-crawler .
 docker run -p 3001:3001 spa-crawler
 ```
 
-## Railway Configuration
+### Test Container
 
-The repository includes `railway.json` for Railway-specific configuration:
+```bash
+curl "http://localhost:3001/crawl?url=https://example.com"
+```
 
-```json
-{
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "startCommand": "npm start",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
+## Render Configuration
+
+The repository includes `render.yaml` for Render Blueprint:
+
+```yaml
+services:
+  - type: web
+    name: spa-crawler
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 10000
 ```
 
 ## Environment Variables
 
-Railway automatically sets:
-- `PORT`: Server port (Railway provides this automatically)
+Render automatically provides:
+- `PORT`: Server port (default: 10000 on Render)
 
-No additional environment variables needed.
+No additional configuration needed.
 
 ## Technical Details
 
+### Playwright vs Puppeteer
+
+**Why Playwright?**
+- ✅ Official Docker images with all dependencies
+- ✅ Better support for modern web frameworks
+- ✅ More reliable page.goto() with 'networkidle'
+- ✅ Better error handling
+- ✅ Easier deployment on Render
+
 ### Browser Configuration
 
-- Headless Chrome via Puppeteer
+- Headless Chromium
 - 3-second wait for SPA rendering
-- Network idle strategy
+- Network idle wait strategy
 - Custom user agent
-- 1920x1080 viewport
 - 30-second timeout per page
 
 ### Performance
 
 - Browser instance reused across requests
+- Contexts created per request (memory efficient)
 - Pages automatically closed after use
-- Optimized for Railway's environment
-- Automatic restart on failure
+- Optimized for Render's environment
 
-### Security
+### CORS
 
-- Runs as non-root user in Docker
-- No sandbox (required for Railway)
-- Input validation on all endpoints
+CORS is enabled for all origins to allow integration with any frontend.
+
+## Render Free Tier Notes
+
+**Limitations:**
+- ⚠️ Service spins down after 15 minutes of inactivity
+- ⚠️ First request after spin-down takes ~30-60 seconds (cold start)
+- ⚠️ 750 hours/month free tier limit
+
+**Recommendations:**
+- Use paid plan for production (no spin-down)
+- Implement retry logic for cold starts
+- Keep service warm with periodic health checks
 
 ## Use Cases
 
-1. **Duplicate Page Detection**: Use `/hash` to detect identical content
-2. **SPA Link Extraction**: Use `/crawl` to get all links from JavaScript-rendered pages
+1. **SPA Link Extraction**: Extract links from JavaScript-rendered sites
+2. **Duplicate Detection**: Use hash endpoint to detect identical pages
 3. **Web Quality Checking**: Integrate with quality checking tools
 4. **Site Mapping**: Build site maps of SPA applications
 
-## Limitations
-
-- 30-second timeout per request
-- Sequential processing (no concurrent requests)
-- Memory usage scales with page complexity
-- Not suitable for very large sites (use batch processing instead)
-
 ## Troubleshooting
 
-### Railway Deployment Issues
+### Render Deployment Issues
 
-1. **Build Fails**: Check Railway build logs for Puppeteer installation errors
-2. **Timeout Errors**: Increase Railway's memory allocation (512MB+ recommended)
-3. **Browser Crashes**: Railway free tier may have memory limits, upgrade if needed
+**Build Fails:**
+- Check Render build logs
+- Ensure Dockerfile is correctly formatted
+- Verify Playwright version compatibility
+
+**Timeout Errors:**
+- Increase timeout in code if needed
+- Upgrade to paid plan for better resources
+
+**Memory Issues:**
+- Render free tier has 512MB RAM limit
+- Consider upgrading for memory-intensive sites
 
 ### Local Development Issues
 
-1. **Puppeteer Install Failed**: Run `npm install --unsafe-perm=true`
-2. **Chrome Not Found**: Puppeteer will download Chrome automatically
-3. **Permission Denied**: Run with proper permissions or use Docker
+**Playwright Install Failed:**
+```bash
+# Install system dependencies first
+npx playwright install-deps chromium
+npx playwright install chromium
+```
+
+**Permission Denied:**
+```bash
+# Run with Docker instead
+docker-compose up
+```
+
+## Comparison with Railway
+
+| Feature | Render (Playwright) | Railway (Puppeteer) |
+|---------|---------------------|---------------------|
+| **Free Tier** | 750h/month, spin-down | $5 credit/month |
+| **Docker Support** | ✅ Native | ✅ Native |
+| **Cold Start** | ~30-60s | Minimal |
+| **Reliability** | High | High |
+| **Best For** | Production apps | Development/testing |
 
 ## Contributing
 
@@ -286,4 +353,4 @@ MIT
 
 ## Author
 
-Created for web quality checking and SPA site analysis with Railway deployment support.
+Created for web quality checking and SPA site analysis with Render deployment support.

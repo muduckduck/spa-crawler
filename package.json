@@ -1,26 +1,23 @@
 {
   "name": "spa-crawler",
   "version": "1.0.0",
-  "description": "Puppeteer-based SPA crawler server",
+  "description": "Playwright-based SPA crawler server for Render",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node index.js"
   },
   "keywords": [
-    "puppeteer",
+    "playwright",
     "spa",
     "crawler",
-    "scraper"
+    "scraper",
+    "render"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^21.11.0",
+    "playwright": "^1.40.0",
     "cors": "^2.8.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
   }
 }

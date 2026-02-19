@@ -7,3 +7,5 @@ README.md
 .DS_Store
 docker-compose.yml
 ecosystem.config.cjs
+railway.json
+render.yaml
