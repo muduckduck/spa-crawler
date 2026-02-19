@@ -1,23 +1,10 @@
 {
   "name": "spa-crawler",
-  "version": "1.0.0",
-  "description": "Playwright-based SPA crawler server for Render",
-  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": [
-    "playwright",
-    "spa",
-    "crawler",
-    "scraper",
-    "render"
-  ],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "playwright": "^1.40.0",
-    "cors": "^2.8.5"
+    "playwright": "^1.58.2"
   }
 }
