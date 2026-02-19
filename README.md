@@ -1,76 +1,53 @@
-# SPA Crawler
+# SPA Crawler - Railway Deployment
 
-Puppeteer-based SPA (Single Page Application) crawler server for extracting fully rendered HTML content and links from JavaScript-heavy websites.
+Puppeteer-based SPA (Single Page Application) crawler server for extracting links and generating content hashes from JavaScript-heavy websites.
 
 ## Features
 
 - 🚀 **SPA Support**: Fully renders JavaScript before extracting content
-- 🔗 **Link Extraction**: Automatically extracts all links from pages
-- 📦 **Batch Processing**: Crawl multiple URLs in a single request
-- 🐳 **Docker Ready**: Includes Dockerfile for easy deployment
-- ⚡ **Express API**: RESTful API endpoints for easy integration
+- 🔗 **Link Extraction**: `/crawl` - Extracts all links from SPA pages
+- 🔐 **Content Hash**: `/hash` - Generates MD5 hash from rendered HTML
+- 🐳 **Docker Ready**: Optimized Dockerfile for Railway deployment
+- ⚡ **Express API**: Simple GET endpoints
 
-## Installation
+## Quick Deploy to Railway
 
-### Local Development
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
 
-```bash
-# Install dependencies
-npm install
-
-# Start server
-npm start
-
-# Development mode (with auto-reload)
-npm run dev
-```
-
-### Docker
-
-```bash
-# Build Docker image
-docker build -t spa-crawler .
-
-# Run container
-docker run -p 3001:3001 spa-crawler
-
-# Run with environment variables
-docker run -p 3001:3001 -e PORT=3001 spa-crawler
-```
+1. Click the button above
+2. Connect your GitHub repository
+3. Railway will automatically detect the Dockerfile
+4. Your service will be deployed with a public URL
 
 ## API Endpoints
 
-### Health Check
+### Root - Service Info
 
 ```bash
-GET /health
+GET /
 ```
 
 **Response:**
 ```json
 {
   "status": "ok",
+  "service": "SPA Crawler",
+  "endpoints": {
+    "crawl": "/crawl?url=<URL>",
+    "hash": "/hash?url=<URL>"
+  },
   "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-### Single URL Crawl
+### Crawl - Extract Links
 
 ```bash
-POST /crawl
-Content-Type: application/json
-
-{
-  "url": "https://example.com",
-  "waitFor": 2000,
-  "extractLinks": true
-}
+GET /crawl?url=https://example.com
 ```
 
 **Parameters:**
 - `url` (required): URL to crawl
-- `waitFor` (optional): Wait time in milliseconds after page load (default: 2000)
-- `extractLinks` (optional): Extract all links from page (default: true)
 
 **Response:**
 ```json
@@ -78,57 +55,32 @@ Content-Type: application/json
   "success": true,
   "url": "https://example.com",
   "title": "Example Domain",
-  "html": "<!DOCTYPE html>...",
-  "links": ["https://...", "https://..."],
-  "linksCount": 42,
+  "links": [
+    "https://example.com/page1",
+    "https://example.com/page2"
+  ],
+  "linksCount": 2,
   "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-### Batch Crawl
+### Hash - Generate Content Hash
 
 ```bash
-POST /crawl/batch
-Content-Type: application/json
-
-{
-  "urls": [
-    "https://example1.com",
-    "https://example2.com"
-  ],
-  "waitFor": 2000,
-  "extractLinks": false
-}
+GET /hash?url=https://example.com
 ```
 
 **Parameters:**
-- `urls` (required): Array of URLs to crawl
-- `waitFor` (optional): Wait time in milliseconds after page load (default: 2000)
-- `extractLinks` (optional): Extract all links from pages (default: false)
+- `url` (required): URL to hash
 
 **Response:**
 ```json
 {
   "success": true,
-  "total": 2,
-  "results": [
-    {
-      "success": true,
-      "url": "https://example1.com",
-      "title": "Example 1",
-      "html": "<!DOCTYPE html>...",
-      "links": [],
-      "linksCount": 0
-    },
-    {
-      "success": true,
-      "url": "https://example2.com",
-      "title": "Example 2",
-      "html": "<!DOCTYPE html>...",
-      "links": [],
-      "linksCount": 0
-    }
-  ],
+  "url": "https://example.com",
+  "title": "Example Domain",
+  "hash": "5d41402abc4b2a76b9719d911017c592",
+  "htmlLength": 1256,
   "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
@@ -138,112 +90,195 @@ Content-Type: application/json
 ### cURL
 
 ```bash
-# Single page crawl
-curl -X POST http://localhost:3001/crawl \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://www.epost.go.kr",
-    "waitFor": 3000,
-    "extractLinks": true
-  }'
+# Extract links from SPA page
+curl "https://your-app.railway.app/crawl?url=https://www.epost.go.kr"
 
-# Batch crawl
-curl -X POST http://localhost:3001/crawl/batch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "urls": [
-      "https://example1.com",
-      "https://example2.com"
-    ],
-    "waitFor": 2000
-  }'
+# Generate content hash
+curl "https://your-app.railway.app/hash?url=https://www.epost.go.kr"
 ```
 
-### JavaScript (axios)
+### JavaScript (fetch)
+
+```javascript
+// Extract links
+const crawlResponse = await fetch(
+  'https://your-app.railway.app/crawl?url=https://www.epost.go.kr'
+);
+const crawlData = await crawlResponse.json();
+console.log('Links:', crawlData.links);
+
+// Generate hash
+const hashResponse = await fetch(
+  'https://your-app.railway.app/hash?url=https://www.epost.go.kr'
+);
+const hashData = await hashResponse.json();
+console.log('Hash:', hashData.hash);
+```
+
+### Integration Example
 
 ```javascript
 const axios = require('axios');
 
-// Single page
-const response = await axios.post('http://localhost:3001/crawl', {
-  url: 'https://www.epost.go.kr',
-  waitFor: 3000,
-  extractLinks: true
-});
+const BASE_URL = 'https://your-app.railway.app';
 
-console.log(response.data.html);
-console.log(response.data.links);
+// Check for duplicate pages using hash
+async function isDuplicatePage(url, knownHashes) {
+  const response = await axios.get(`${BASE_URL}/hash`, {
+    params: { url }
+  });
+  
+  const { hash } = response.data;
+  return knownHashes.includes(hash);
+}
 
-// Batch
-const batchResponse = await axios.post('http://localhost:3001/crawl/batch', {
-  urls: [
-    'https://example1.com',
-    'https://example2.com'
-  ],
-  waitFor: 2000
-});
+// Extract all links from SPA
+async function getAllLinks(url) {
+  const response = await axios.get(`${BASE_URL}/crawl`, {
+    params: { url }
+  });
+  
+  return response.data.links;
+}
 
-batchResponse.data.results.forEach(result => {
-  console.log(result.title, result.linksCount);
-});
+// Usage
+const mainUrl = 'https://www.epost.go.kr';
+const links = await getAllLinks(mainUrl);
+console.log(`Found ${links.length} links`);
+
+const knownHashes = [];
+for (const link of links) {
+  const isDuplicate = await isDuplicatePage(link, knownHashes);
+  if (!isDuplicate) {
+    console.log('New page:', link);
+    const response = await axios.get(`${BASE_URL}/hash`, { params: { url: link } });
+    knownHashes.push(response.data.hash);
+  }
+}
+```
+
+## Local Development
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Run Locally
+
+```bash
+npm start
+# Server will start on http://localhost:3001
+```
+
+### Test Endpoints
+
+```bash
+# Health check
+curl http://localhost:3001/
+
+# Crawl a page
+curl "http://localhost:3001/crawl?url=https://example.com"
+
+# Generate hash
+curl "http://localhost:3001/hash?url=https://example.com"
+```
+
+## Docker
+
+### Build Image
+
+```bash
+docker build -t spa-crawler .
+```
+
+### Run Container
+
+```bash
+docker run -p 3001:3001 spa-crawler
+```
+
+## Railway Configuration
+
+The repository includes `railway.json` for Railway-specific configuration:
+
+```json
+{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "npm start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
 ```
 
 ## Environment Variables
 
-- `PORT`: Server port (default: 3001)
+Railway automatically sets:
+- `PORT`: Server port (Railway provides this automatically)
+
+No additional environment variables needed.
 
 ## Technical Details
 
 ### Browser Configuration
 
-The server uses Puppeteer with the following optimizations:
-- Headless mode
-- No sandbox (for Docker compatibility)
-- Disabled GPU and software rasterizer
+- Headless Chrome via Puppeteer
+- 3-second wait for SPA rendering
+- Network idle strategy
 - Custom user agent
 - 1920x1080 viewport
-- Network idle wait strategy
+- 30-second timeout per page
 
 ### Performance
 
-- Browser instance is reused across requests
-- Pages are automatically closed after crawling
-- Graceful shutdown on SIGTERM/SIGINT
+- Browser instance reused across requests
+- Pages automatically closed after use
+- Optimized for Railway's environment
+- Automatic restart on failure
 
-### Limitations
+### Security
 
-- 30-second timeout per page
-- Sequential processing for batch requests
-- Memory usage scales with concurrent requests
+- Runs as non-root user in Docker
+- No sandbox (required for Railway)
+- Input validation on all endpoints
 
-## Deployment
+## Use Cases
 
-### Docker Compose
+1. **Duplicate Page Detection**: Use `/hash` to detect identical content
+2. **SPA Link Extraction**: Use `/crawl` to get all links from JavaScript-rendered pages
+3. **Web Quality Checking**: Integrate with quality checking tools
+4. **Site Mapping**: Build site maps of SPA applications
 
-```yaml
-version: '3.8'
-services:
-  spa-crawler:
-    build: .
-    ports:
-      - "3001:3001"
-    environment:
-      - PORT=3001
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
+## Limitations
 
-### Production Considerations
+- 30-second timeout per request
+- Sequential processing (no concurrent requests)
+- Memory usage scales with page complexity
+- Not suitable for very large sites (use batch processing instead)
 
-1. **Memory**: Allocate at least 1GB RAM for the container
-2. **Timeout**: Adjust timeout based on target sites
-3. **Rate Limiting**: Implement rate limiting for production use
-4. **Monitoring**: Monitor memory usage and restart if needed
-5. **Security**: Run behind a reverse proxy (nginx, Cloudflare)
+## Troubleshooting
+
+### Railway Deployment Issues
+
+1. **Build Fails**: Check Railway build logs for Puppeteer installation errors
+2. **Timeout Errors**: Increase Railway's memory allocation (512MB+ recommended)
+3. **Browser Crashes**: Railway free tier may have memory limits, upgrade if needed
+
+### Local Development Issues
+
+1. **Puppeteer Install Failed**: Run `npm install --unsafe-perm=true`
+2. **Chrome Not Found**: Puppeteer will download Chrome automatically
+3. **Permission Denied**: Run with proper permissions or use Docker
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first.
 
 ## License
 
@@ -251,4 +286,4 @@ MIT
 
 ## Author
 
-Created for web quality checking and SPA site analysis.
+Created for web quality checking and SPA site analysis with Railway deployment support.

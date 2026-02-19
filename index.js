@@ -1,15 +1,11 @@
 const express = require('express');
 const puppeteer = require('puppeteer');
-const cors = require('cors');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Browser instance pool
+// Browser instance
 let browser = null;
 
 // Initialize browser
@@ -32,16 +28,24 @@ async function initBrowser() {
 }
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    service: 'SPA Crawler',
+    endpoints: {
+      crawl: '/crawl?url=<URL>',
+      hash: '/hash?url=<URL>'
+    },
+    timestamp: new Date().toISOString() 
+  });
 });
 
-// Main crawl endpoint
-app.post('/crawl', async (req, res) => {
-  const { url, waitFor = 2000, extractLinks = true } = req.body;
+// Crawl endpoint - Extract all links from SPA page
+app.get('/crawl', async (req, res) => {
+  const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
+    return res.status(400).json({ error: 'URL parameter is required' });
   }
 
   console.log(`[${new Date().toISOString()}] Crawling: ${url}`);
@@ -65,28 +69,31 @@ app.post('/crawl', async (req, res) => {
       timeout: 30000,
     });
 
-    // Wait for additional time (for SPA to render)
-    await page.waitForTimeout(waitFor);
+    // Wait for SPA to render (3 seconds)
+    await page.waitForTimeout(3000);
 
-    // Extract HTML content
-    const html = await page.content();
+    // Extract all links
+    const links = await page.evaluate(() => {
+      const anchors = Array.from(document.querySelectorAll('a[href]'));
+      return anchors
+        .map(a => {
+          try {
+            const href = a.href;
+            // Only return absolute URLs
+            if (href.startsWith('http://') || href.startsWith('https://')) {
+              return href;
+            }
+            return null;
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(href => href !== null)
+        .filter((href, index, self) => self.indexOf(href) === index); // Remove duplicates
+    });
 
-    // Extract links if requested
-    let links = [];
-    if (extractLinks) {
-      links = await page.evaluate(() => {
-        const anchors = Array.from(document.querySelectorAll('a[href]'));
-        return anchors
-          .map(a => a.href)
-          .filter(href => href.startsWith('http'))
-          .filter((href, index, self) => self.indexOf(href) === index);
-      });
-    }
-
-    // Extract page title
+    // Extract page info
     const title = await page.title();
-
-    // Get final URL (in case of redirects)
     const finalUrl = page.url();
 
     console.log(`[${new Date().toISOString()}] Success: ${url} (${links.length} links found)`);
@@ -95,7 +102,6 @@ app.post('/crawl', async (req, res) => {
       success: true,
       url: finalUrl,
       title,
-      html,
       links,
       linksCount: links.length,
       timestamp: new Date().toISOString(),
@@ -115,81 +121,71 @@ app.post('/crawl', async (req, res) => {
   }
 });
 
-// Batch crawl endpoint
-app.post('/crawl/batch', async (req, res) => {
-  const { urls, waitFor = 2000, extractLinks = false } = req.body;
+// Hash endpoint - Generate hash from rendered page
+app.get('/hash', async (req, res) => {
+  const { url } = req.query;
 
-  if (!urls || !Array.isArray(urls) || urls.length === 0) {
-    return res.status(400).json({ error: 'URLs array is required' });
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter is required' });
   }
 
-  console.log(`[${new Date().toISOString()}] Batch crawling: ${urls.length} URLs`);
+  console.log(`[${new Date().toISOString()}] Hashing: ${url}`);
 
-  const results = [];
-  const browserInstance = await initBrowser();
+  let page = null;
+  try {
+    const browserInstance = await initBrowser();
+    page = await browserInstance.newPage();
 
-  for (const url of urls) {
-    let page = null;
-    try {
-      page = await browserInstance.newPage();
-      await page.setViewport({ width: 1920, height: 1080 });
-      await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      );
+    // Set viewport
+    await page.setViewport({ width: 1920, height: 1080 });
 
-      await page.goto(url, {
-        waitUntil: 'networkidle2',
-        timeout: 30000,
-      });
+    // Set user agent
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
 
-      await page.waitForTimeout(waitFor);
+    // Navigate to URL
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: 30000,
+    });
 
-      const html = await page.content();
-      const title = await page.title();
-      const finalUrl = page.url();
+    // Wait for SPA to render (3 seconds)
+    await page.waitForTimeout(3000);
 
-      let links = [];
-      if (extractLinks) {
-        links = await page.evaluate(() => {
-          const anchors = Array.from(document.querySelectorAll('a[href]'));
-          return anchors
-            .map(a => a.href)
-            .filter(href => href.startsWith('http'))
-            .filter((href, index, self) => self.indexOf(href) === index);
-        });
-      }
+    // Get rendered HTML
+    const html = await page.content();
 
-      results.push({
-        success: true,
-        url: finalUrl,
-        title,
-        html,
-        links,
-        linksCount: links.length,
-      });
+    // Generate hash (MD5)
+    const hash = crypto.createHash('md5').update(html).digest('hex');
 
-      console.log(`[${new Date().toISOString()}] Success: ${url}`);
+    // Extract page info
+    const title = await page.title();
+    const finalUrl = page.url();
 
-    } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error: ${url}:`, error.message);
-      results.push({
-        success: false,
-        url,
-        error: error.message,
-      });
-    } finally {
-      if (page) {
-        await page.close();
-      }
+    console.log(`[${new Date().toISOString()}] Success: ${url} (hash: ${hash})`);
+
+    res.json({
+      success: true,
+      url: finalUrl,
+      title,
+      hash,
+      htmlLength: html.length,
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error hashing ${url}:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (page) {
+      await page.close();
     }
   }
-
-  res.json({
-    success: true,
-    total: urls.length,
-    results,
-    timestamp: new Date().toISOString(),
-  });
 });
 
 // Graceful shutdown
@@ -210,9 +206,9 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`SPA Crawler server listening on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Crawl endpoint: POST http://localhost:${PORT}/crawl`);
-  console.log(`Batch crawl endpoint: POST http://localhost:${PORT}/crawl/batch`);
+  console.log(`Health check: http://localhost:${PORT}/`);
+  console.log(`Crawl endpoint: GET http://localhost:${PORT}/crawl?url=<URL>`);
+  console.log(`Hash endpoint: GET http://localhost:${PORT}/hash?url=<URL>`);
 });
