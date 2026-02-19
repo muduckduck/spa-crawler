@@ -1,0 +1,26 @@
+{
+  "name": "spa-crawler",
+  "version": "1.0.0",
+  "description": "Puppeteer-based SPA crawler server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "puppeteer",
+    "spa",
+    "crawler",
+    "scraper"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^21.11.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
